@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USER:-trellis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-trellis}
+      POSTGRES_DB: ${DB_NAME:-trellis}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/0-schema.sql
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
