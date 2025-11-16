@@ -17,6 +17,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+temporal_app/__pycache__/
+scripts/__pycache__/
 
 # IDEs
 .vscode/

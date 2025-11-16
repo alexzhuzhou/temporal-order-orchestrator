@@ -1,602 +1,664 @@
 # Temporal Order Orchestrator
 
-A production-ready order orchestration system built with Temporal that demonstrates resilient workflow orchestration for e-commerce order processing. This system handles the complete order lifecycle from receipt through validation, payment processing, and shipping coordination.
+A production-ready order orchestration system built with Temporal that demonstrates resilient workflow orchestration for e-commerce order processing with **signals**, **timers**, **retries**, **child workflows**, and **separate task queues**.
 
-## Table of Contents
+## 🎯 Table of Contents
 
 - [Overview](#overview)
+- [Features](#features)
 - [Prerequisites](#prerequisites)
-- [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Running the Application](#running-the-application)
-- [Testing Workflows](#testing-workflows)
-- [Project Structure](#project-structure)
-- [How It Works](#how-it-works)
+- [Architecture](#architecture)
+- [Usage](#usage)
+- [API Reference](#api-reference)
+- [Testing](#testing)
 - [Configuration](#configuration)
-- [Development](#development)
-- [Security](#security)
 - [Troubleshooting](#troubleshooting)
 
-## Overview
+---
 
-This application demonstrates a multi-step order processing workflow using Temporal's workflow orchestration capabilities. Key features include:
+## 📋 Overview
 
-- **Resilient workflow execution** with automatic retries and timeout handling
-- **Parent-child workflow coordination** for shipping operations
-- **Idempotent payment processing** to handle retries safely
-- **Database state tracking** with PostgreSQL
-- **Event logging** for complete audit trails
-- **Intentional flakiness** for testing resilience (configurable)
+This application demonstrates a complete order processing workflow using Temporal's workflow orchestration capabilities. The system handles the full order lifecycle: order receipt → validation → **manual approval** → payment → shipping → completion.
 
-## Prerequisites
+### Key Features
 
-Before you begin, ensure you have the following installed:
+✅ **Workflow Signals**
+- `CancelOrder` - Cancel orders before payment
+- `UpdateAddress` - Update shipping address before dispatch
+- `ApproveOrder` - Manual approval after validation
+
+✅ **Manual Review Timer**
+- Workflow pauses after validation
+- Waits for human approval signal (30-second timeout)
+- Can be cancelled during review
+
+✅ **Retry Logic**
+- Parent workflow retries child workflow up to 3 times
+- 2-second delay between retries
+- Graceful error handling and logging
+
+✅ **Separate Task Queues**
+- `order-tq` for OrderWorkflow
+- `shipping-tq` for ShippingWorkflow
+- Demonstrates queue isolation
+
+✅ **REST API**
+- Start workflows
+- Send signals (cancel, update address, approve)
+- Query workflow status
+- Get workflow results
+
+✅ **Database Persistence**
+- PostgreSQL for order/payment/event tracking
+- Idempotent payment processing
+- Complete audit trail
+
+✅ **Comprehensive Testing**
+- Unit tests with Temporal's testing framework
+- Integration tests
+- API endpoint tests
+
+---
+
+## 🎨 Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Client Layer                             │
+│  (REST API / CLI / Direct Client)                           │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Temporal Server                             │
+│  (Workflow orchestration, state management)                 │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+        ┌──────────────────────────────────┐
+        │                                  │
+┌───────────────┐              ┌──────────────────┐
+│ Order Worker  │              │ Shipping Worker  │
+│  (order-tq)   │              │  (shipping-tq)   │
+└───────────────┘              └──────────────────┘
+        │                                  │
+        ↓                                  ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Business Logic & Activities                     │
+│  (Order processing, payment, shipping)                      │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  PostgreSQL Database                         │
+│  (Orders, Payments, Events)                                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Workflow Flow
+
+```
+START
+  ↓
+[1] RECEIVING → receive_order
+  ↓
+[2] VALIDATING → validate_order
+  ↓
+[3] AWAITING_MANUAL_APPROVAL ⏰
+    └─ Wait for approve_order signal (30s timeout)
+    └─ Can accept update_address signal
+    └─ Can accept cancel_order signal
+  ↓
+[4] CHARGING_PAYMENT → charge_payment (idempotent)
+  ↓
+[5] SHIPPING → Child Workflow on shipping-tq
+    ├─ prepare_package
+    └─ dispatch_carrier
+    └─ Retry up to 3 times on failure
+  ↓
+[6] MARKING_SHIPPED → mark_order_shipped
+  ↓
+COMPLETED ✓
+```
+
+---
+
+## 🚀 Prerequisites
 
 - **Python 3.10+** ([Download](https://www.python.org/downloads/))
 - **Docker Desktop** ([Download](https://www.docker.com/products/docker-desktop/))
-- **Temporal CLI** ([Installation Guide](https://docs.temporal.io/cli))
 - **Git** (for cloning the repository)
 
-## Installation
+---
 
-### 1. Clone the Repository
+## ⚡ Quick Start
+
+### 1. Clone and Install
 
 ```bash
 git clone <repository-url>
 cd temporal-order-orchestrator
-```
 
-### 2. Create a Virtual Environment
-
-```bash
+# Create virtual environment
 python -m venv .venv
-```
 
-**Activate the virtual environment:**
+# Activate virtual environment
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# Windows CMD:
+.venv\Scripts\activate.bat
+# macOS/Linux:
+source .venv/bin/activate
 
-- **Windows (PowerShell):**
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  ```
-
-- **Windows (Command Prompt):**
-  ```cmd
-  .venv\Scripts\activate.bat
-  ```
-
-- **macOS/Linux:**
-  ```bash
-  source .venv/bin/activate
-  ```
-
-### 3. Install Python Dependencies
-
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables (Optional for Development)
-
-For development, you can use the default settings. For production or custom configuration:
+### 2. Start All Services
 
 ```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit .env and set your passwords (required for production!)
-# DB_PASSWORD=your_secure_password_here
-```
-
-**Security Note:** Never commit `.env` files to version control. See [SECURITY.md](SECURITY.md) for more details.
-
-### 5. Start PostgreSQL Database
-
-```bash
+# Start Docker services (Temporal + Databases)
 docker-compose up -d
+
+# Wait ~30 seconds for services to be ready
 ```
 
-This will:
-- Start PostgreSQL on port 5432
-- Automatically create the database schema
-- Use default credentials for development (username: `trellis`, password: `trellis`)
+This starts:
+- **Application Database** (PostgreSQL on port 5432)
+- **Temporal Database** (PostgreSQL on port 5433)
+- **Temporal Server** (gRPC on port 7233)
+- **Temporal UI** (Web on port 8080)
 
-**Verify the database is running:**
+### 3. Start Workers
 
-```bash
-docker ps
-```
-
-You should see `temporal-order-orchestrator-db-1` with status "Up".
-
-**Security Warning:** The default password is `trellis` for development convenience. For production, always set `DB_PASSWORD` environment variable before running docker-compose. See [SECURITY.md](SECURITY.md).
-
-### 6. Start Temporal Server
-
-**Option A: Using Temporal CLI (Recommended for development)**
-
-```bash
-temporal server start-dev
-```
-
-This starts a local Temporal server on `localhost:7233` with a Web UI at `http://localhost:8233`.
-
-**Option B: Using Docker**
-
-```bash
-docker run -p 7233:7233 -p 8233:8233 temporalio/auto-setup:latest
-```
-
-## Quick Start
-
-Once all prerequisites are installed and services are running:
-
-```bash
-# Terminal 1: Start the Temporal worker
-python -m temporal_app.worker_dev
-
-# Terminal 2: Run a test workflow
-python -m scripts.run_order_once
-```
-
-## Running the Application
-
-### Step 1: Start the Worker
-
-The worker processes workflow and activity tasks. In a terminal:
+In a new terminal (with virtual environment activated):
 
 ```bash
 python -m temporal_app.worker_dev
 ```
 
-**Expected output:**
-- The worker connects to Temporal server at `localhost:7233`
-- It registers workflows: `OrderWorkflow`, `ShippingWorkflow`
-- It registers 6 activities for order processing
-- The terminal will be silent while waiting for work
+This starts two workers:
+- Order Worker listening on `order-tq`
+- Shipping Worker listening on `shipping-tq`
 
-**Keep this terminal running** - the worker must be active to process workflows.
+### 4. (Optional) Start API Server
 
-### Step 2: Submit a Workflow
-
-In a **new terminal** (with the virtual environment activated):
+In another terminal (with virtual environment activated):
 
 ```bash
-python -m scripts.run_order_once
+python -m api.server
 ```
 
-This script:
-- Generates a unique order ID and payment ID
-- Starts an `OrderWorkflow` in Temporal
-- Waits for the workflow to complete
-- Prints the final result and status
+API will be available at: http://localhost:8000
 
-**Example output:**
+---
 
-```
-Started workflow: order-a1b2c3d4 019a8ea5-b067-77be-9fdb-213c4764eba0
-Workflow result: DISPATCHED
-Final status: {'state': 'COMPLETED', 'last_error': None}
-```
+## 💻 Usage
 
-### Step 3: Monitor in Temporal UI
+### Option A: Using the CLI Tool (Recommended)
 
-Open your browser to **http://localhost:8233** to access the Temporal Web UI.
-
-You can:
-- View workflow execution history
-- See activity retries and timeouts
-- Query workflow state
-- Monitor worker health
-- View event logs
-
-## Testing Workflows
-
-### Running Multiple Workflows
-
-Each execution of `run_order_once.py` creates a unique workflow:
+#### Start an Order
 
 ```bash
-python -m scripts.run_order_once  # Creates order-abc123
-python -m scripts.run_order_once  # Creates order-def456
-python -m scripts.run_order_once  # Creates order-ghi789
+python -m scripts.cli start
 ```
 
-### Understanding Flaky Behavior
+Output:
+```
+🚀 Starting OrderWorkflow
+   Order ID: order-abc123
+   Payment ID: payment-xyz789
 
-The system includes **intentional flakiness** to demonstrate Temporal's resilience features. Each activity has a 33% chance of:
+⏳ Workflow is now waiting for manual approval...
 
-1. **Immediate error** - Raises `RuntimeError`
-2. **Timeout** - Sleeps for 300 seconds (activity times out at 4 seconds)
-3. **Success** - Completes immediately
-
-This means workflows will often fail and retry. Watch the Temporal UI to see:
-- Activity retries with exponential backoff
-- Timeout handling
-- Workflow recovery
-
-### Disabling Flakiness for Testing
-
-To see successful end-to-end execution without retries, edit `temporal_app/functions.py`:
-
-```python
-async def flaky_call() -> None:
-    """Either raise an error or sleep long enough to trigger an activity timeout."""
-    return  # Always succeed - comment out the random logic below
-
-    # rand_num = random.random()
-    # if rand_num < 0.33:
-    #     raise RuntimeError("Forced failure for testing")
-    # ...
+To approve this order, run:
+   python -m scripts.cli approve order-abc123
 ```
 
-**Remember to restart the worker** after making changes:
-- Press `Ctrl+C` in the worker terminal
-- Run `python -m temporal_app.worker_dev` again
+#### Approve the Order
 
-## Project Structure
-
-```
-temporal-order-orchestrator/
-├── temporal_app/
-│   ├── __init__.py
-│   ├── activities.py      # Activity definitions (thin wrappers)
-│   ├── workflows.py       # Workflow definitions (OrderWorkflow, ShippingWorkflow)
-│   ├── functions.py       # Business logic with intentional flakiness
-│   ├── db.py             # Database session management
-│   ├── config.py         # Configuration (Temporal host, DB URL)
-│   └── worker_dev.py     # Worker entry point
-├── scripts/
-│   ├── init_db.py        # Manual database initialization
-│   ├── run_order_once.py # Test script to start workflows
-│   └── test_db.py        # Database connection testing
-├── db/
-│   └── schema.sql        # PostgreSQL schema (orders, payments, events)
-├── docker-compose.yml    # PostgreSQL service definition
-├── requirements.txt      # Python dependencies
-├── CLAUDE.md            # Detailed architecture documentation
-└── README.md            # This file
-```
-
-## How It Works
-
-### Workflow Orchestration
-
-#### OrderWorkflow
-
-The main orchestrator that coordinates the entire order fulfillment process:
-
-1. **Receive Order** - Creates order record in database (state: RECEIVED)
-2. **Validate Order** - Validates order data (state: VALIDATED)
-3. **Charge Payment** - Processes payment with idempotency (state: PAID)
-4. **Shipping** - Spawns child `ShippingWorkflow` (state: SHIPPING)
-5. **Mark Shipped** - Updates order status (state: SHIPPED)
-6. **Complete** - Workflow completes successfully
-
-**Location:** `temporal_app/workflows.py:49-105`
-
-#### ShippingWorkflow
-
-Child workflow that handles physical shipping operations:
-
-1. **Prepare Package** - Prepares items for shipping
-2. **Dispatch Carrier** - Sends package to shipping carrier
-3. **Return Status** - Returns "DISPATCHED" to parent workflow
-
-**Location:** `temporal_app/workflows.py:19-46`
-
-### Activity Layer
-
-Activities are thin wrappers around business logic:
-
-- All activities have **4-second timeouts** (schedule-to-close and start-to-close)
-- Activities automatically retry on failure (Temporal default retry policy)
-- Each activity calls the corresponding function in `functions.py`
-
-**Location:** `temporal_app/activities.py`
-
-### Business Logic Layer
-
-Core business functions implement order processing:
-
-- **`order_received()`** - Creates order record and event
-- **`order_validated()`** - Validates order and updates state
-- **`payment_charged()`** - Charges payment with idempotency key
-- **`package_prepared()`** - Marks package as prepared
-- **`carrier_dispatched()`** - Marks package as dispatched
-- **`order_shipped()`** - Marks order as shipped
-
-All functions:
-- Call `flaky_call()` first to simulate failures
-- Perform database writes to track state
-- Emit events for audit trails
-
-**Location:** `temporal_app/functions.py`
-
-### Database Schema
-
-Three core tables:
-
-- **`orders`** - Tracks order state transitions (RECEIVED → VALIDATED → PAID → SHIPPED)
-- **`payments`** - Stores payment records with idempotency key (`payment_id`)
-- **`events`** - Event log for all order-related actions with JSON payloads
-
-**Location:** `db/schema.sql`
-
-### Idempotency
-
-The `payment_charged()` function demonstrates critical idempotency handling:
-
-```python
-# Check if payment_id already exists
-row = db.execute(
-    text("SELECT status, amount FROM payments WHERE payment_id = :pid"),
-    {"pid": payment_id},
-).one_or_none()
-
-if row:
-    # Return existing result - safe for retries
-    return {"status": row.status, "amount": row.amount}
-
-# First time - process payment
-# ...
-```
-
-This ensures that even if Temporal retries the activity, the payment is only charged once.
-
-**Location:** `temporal_app/functions.py:78-133`
-
-## Troubleshooting
-
-### Worker Not Starting
-
-**Problem:** `ModuleNotFoundError: No module named 'temporal_app'`
-
-**Solution:**
 ```bash
-# Ensure you're using the -m flag:
-python -m temporal_app.worker_dev
-
-# NOT: python temporal_app/worker_dev.py
+python -m scripts.cli approve order-abc123
 ```
 
-### Database Connection Failed
+#### Check Order Status
 
-**Problem:** `FATAL: password authentication failed for user "trellis"`
-
-**Possible causes:**
-
-1. **Another PostgreSQL instance is running on port 5432**
-
-   **Solution:** Stop other PostgreSQL services:
-   ```bash
-   # Windows
-   net stop postgresql-x64-17
-
-   # Disable auto-start
-   sc config postgresql-x64-17 start=disabled
-   ```
-
-2. **Docker database was created with different credentials**
-
-   **Solution:** Recreate the database:
-   ```bash
-   docker-compose down -v  # Remove old volume
-   docker-compose up -d     # Start fresh
-   ```
-
-### Workflow Fails Immediately
-
-**Problem:** `TypeError: execute_activity() takes from 1 to 2 positional arguments...`
-
-**Cause:** Code was updated while old workflows were running. Temporal replays workflows from history.
-
-**Solution:** Start a new workflow with a new ID (the script does this automatically):
 ```bash
-python -m scripts.run_order_once
+python -m scripts.cli status order-abc123
 ```
 
-### Temporal Server Not Running
+Output:
+```
+📊 Workflow Status:
+   Status: RUNNING
 
-**Problem:** Worker shows connection timeout or `Connection refused`
+📋 Order Details:
+   State: CHARGING_PAYMENT
+   Cancelled: False
+   Manual Review Approved: True
+```
 
-**Solution:** Start the Temporal server:
+#### Cancel an Order (before payment)
+
 ```bash
-temporal server start-dev
+python -m scripts.cli cancel order-abc123
 ```
 
-**Verify it's running:**
-- Visit http://localhost:8233 in your browser
-- You should see the Temporal Web UI
+#### Update Shipping Address (before shipping)
 
-### All Workflows Timing Out
-
-**Problem:** Every workflow times out even after multiple retries
-
-**Cause:** The flaky_call() function has a 67% failure rate (33% error + 33% timeout)
-
-**Solution:** Either:
-
-1. **Wait for retries** - Eventually one will succeed (Temporal will keep retrying)
-2. **Disable flakiness temporarily** - See "Disabling Flakiness for Testing" section above
-3. **Increase the run timeout** in `scripts/run_order_once.py`:
-   ```python
-   run_timeout=timedelta(seconds=300)  # Increase from 15 to 300
-   ```
-
-### Database Schema Not Created
-
-**Problem:** SQL errors about missing tables
-
-**Solution:** Manually initialize the schema:
 ```bash
-python scripts/init_db.py
+python -m scripts.cli update-address order-abc123 "456 New St" "Boston" "MA" "02101"
 ```
 
-Or ensure docker-compose mounted the schema:
+#### Wait for Workflow Result
+
 ```bash
-docker-compose down
-docker-compose up -d
-docker logs temporal-order-orchestrator-db-1
-# Should see: "CREATE TABLE" messages
+python -m scripts.cli wait order-abc123
 ```
 
-## Additional Resources
+### Option B: Using the REST API
 
-- **Temporal Documentation:** https://docs.temporal.io/
-- **Temporal Python SDK:** https://docs.temporal.io/dev-guide/python
-- **Project Architecture:** See `CLAUDE.md` for detailed implementation notes
+#### Start the API Server
 
-## Configuration
+```bash
+python -m api.server
+```
+
+#### Start an Order
+
+```bash
+curl -X POST http://localhost:8000/orders/order-001/start \
+  -H "Content-Type: application/json" \
+  -d '{"payment_id": "payment-001"}'
+```
+
+#### Approve Order
+
+```bash
+curl -X POST http://localhost:8000/orders/order-001/signals/approve
+```
+
+#### Update Address
+
+```bash
+curl -X POST http://localhost:8000/orders/order-001/signals/update-address \
+  -H "Content-Type: application/json" \
+  -d '{
+    "street": "456 New St",
+    "city": "Boston",
+    "state": "MA",
+    "zip_code": "02101",
+    "country": "USA"
+  }'
+```
+
+#### Cancel Order
+
+```bash
+curl -X POST http://localhost:8000/orders/order-001/signals/cancel
+```
+
+#### Get Order Status
+
+```bash
+curl http://localhost:8000/orders/order-001/status
+```
+
+#### Get Workflow Result
+
+```bash
+curl http://localhost:8000/orders/order-001/result
+```
+
+### Option C: Using Temporal UI
+
+1. Open http://localhost:8080 in your browser
+2. Navigate to **Workflows**
+3. Find your workflow by ID (e.g., `order-abc123`)
+4. Send signals using the UI's signal button
+
+---
+
+## 📚 API Reference
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | Health check |
+| `POST` | `/orders/{order_id}/start` | Start new order workflow |
+| `POST` | `/orders/{order_id}/signals/cancel` | Cancel order |
+| `POST` | `/orders/{order_id}/signals/update-address` | Update shipping address |
+| `POST` | `/orders/{order_id}/signals/approve` | Approve order (manual review) |
+| `GET` | `/orders/{order_id}/status` | Get workflow status |
+| `GET` | `/orders/{order_id}/result` | Get workflow result (waits if running) |
+
+### API Documentation
+
+Visit http://localhost:8000/docs for interactive Swagger documentation.
+
+---
+
+## 🧪 Testing
+
+### Run All Tests
+
+```bash
+pytest
+```
+
+### Run Specific Test Files
+
+```bash
+# Workflow tests
+pytest tests/test_workflows.py -v
+
+# API tests
+pytest tests/test_api.py -v
+```
+
+### Run Tests with Coverage
+
+```bash
+pytest --cov=temporal_app --cov=api --cov-report=html
+```
+
+### Test Categories
+
+- **Unit Tests**: Test workflows in isolation using Temporal's testing framework
+- **Integration Tests**: Test complete order lifecycle
+- **API Tests**: Test REST API endpoints
+
+---
+
+## ⚙️ Configuration
 
 ### Environment Variables
 
-You can customize behavior with environment variables:
+Create a `.env` file (copy from `.env.example`):
 
 ```bash
-# Temporal configuration
-export TEMPORAL_HOST="localhost:7233"
-export TEMPORAL_NAMESPACE="default"
+# Temporal Configuration
+TEMPORAL_HOST=localhost:7233
+TEMPORAL_NAMESPACE=default
 
-# Database configuration
-export DB_PASSWORD="your_secure_password"
-export DB_URL="postgresql+psycopg2://trellis:${DB_PASSWORD}@localhost:5432/trellis"
+# Database Configuration
+DB_USER=trellis
+DB_PASSWORD=your_secure_password
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=trellis
 ```
 
-Or use individual components:
-```bash
-export DB_USER="trellis"
-export DB_PASSWORD="your_secure_password"
-export DB_HOST="localhost"
-export DB_PORT="5432"
-export DB_NAME="trellis"
+### Task Queues
+
+Configured in `temporal_app/config.py`:
+
+```python
+ORDER_TASK_QUEUE = "order-tq"      # For OrderWorkflow
+SHIPPING_TASK_QUEUE = "shipping-tq"  # For ShippingWorkflow
 ```
 
 ### Activity Timeouts
 
-To adjust activity timeouts, edit `temporal_app/activities.py`:
+Configured in `temporal_app/activities.py`:
 
 ```python
-ACTIVITY_SCHEDULE_TO_CLOSE = timedelta(seconds=4)  # Change as needed
-ACTIVITY_START_TO_CLOSE = timedelta(seconds=4)     # Change as needed
+ACTIVITY_SCHEDULE_TO_CLOSE = timedelta(seconds=4)
+ACTIVITY_START_TO_CLOSE = timedelta(seconds=4)
 ```
 
-**Remember to restart the worker** after making changes.
-
-## Development
-
-### Adding New Activities
-
-1. Add business logic function to `temporal_app/functions.py`
-2. Create activity wrapper in `temporal_app/activities.py`
-3. Register activity in `temporal_app/worker_dev.py`
-4. Use in workflow via `workflow.execute_activity()`
-
-### Adding New Workflows
-
-1. Create workflow class in `temporal_app/workflows.py`
-2. Decorate class with `@workflow.defn`
-3. Add `@workflow.run` method
-4. Register in `temporal_app/worker_dev.py`
-
-## Security
-
-### Important Security Considerations
-
-This application follows security best practices for handling sensitive information:
-
-#### No Hardcoded Credentials
-
-All sensitive credentials are managed through environment variables:
-- Database passwords
-- API keys (if added in future)
-- Connection strings
-
-#### Development vs Production
-
-**Development Mode:**
-- Uses default password (`trellis`) if `DB_PASSWORD` environment variable is not set
-- Shows a warning when using default credentials
-- Suitable for local development only
-
-**Production Mode:**
-- **REQUIRES** `DB_PASSWORD` environment variable to be set
-- No default passwords accepted
-- All credentials must come from secure sources
-
-#### Environment Variables Setup
-
-1. **Copy the example file:**
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Set secure passwords:**
-   ```bash
-   # .env file
-   DB_PASSWORD=your_very_secure_random_password_here
-   ```
-
-3. **Never commit `.env` to version control:**
-   - The `.gitignore` file already excludes `.env` files
-   - Use `.env.example` for documentation only
-
-#### Security Best Practices
-
-1. **Use Strong Passwords:**
-   ```bash
-   # Generate a secure password
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   ```
-
-2. **Enable SSL/TLS for Database Connections:**
-   ```bash
-   DB_URL="postgresql+psycopg2://user:pass@host:port/db?sslmode=require"
-   ```
-
-3. **Use Secrets Management in Production:**
-   - AWS Secrets Manager
-   - HashiCorp Vault
-   - Azure Key Vault
-   - Google Cloud Secret Manager
-
-4. **Regular Security Maintenance:**
-   - Rotate credentials quarterly
-   - Update dependencies regularly
-   - Monitor access logs
-   - Perform security audits
-
-#### Configuration Validation
-
-The application will show warnings if running with insecure configuration:
+### Workflow Timeout
 
 ```python
-UserWarning: DB_PASSWORD not set! Using insecure default for development only.
-Set DB_PASSWORD environment variable in production!
+run_timeout = timedelta(seconds=15)  # Total workflow must complete in 15 seconds
 ```
 
-**Never ignore this warning in production environments.**
+---
 
-### Additional Security Resources
+## 🗄️ Database Schema
 
-For comprehensive security guidance, see:
-- **[SECURITY.md](SECURITY.md)** - Detailed security documentation
-- **[.env.example](.env.example)** - Example environment configuration
-- [Temporal Security Best Practices](https://docs.temporal.io/security)
-- [PostgreSQL Security](https://www.postgresql.org/docs/current/security.html)
+### Tables
 
-### Reporting Security Issues
+#### `orders`
+```sql
+CREATE TABLE orders (
+    id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    address_json TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-If you discover a security vulnerability, please email: [security-contact@example.com]
+**States**: RECEIVED → VALIDATED → PAID → PACKAGE_PREPARED → CARRIER_DISPATCHED → SHIPPED
 
-**Do not open public issues for security vulnerabilities.**
+#### `payments`
+```sql
+CREATE TABLE payments (
+    payment_id TEXT PRIMARY KEY,  -- Idempotency key
+    order_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-## License
+#### `events`
+```sql
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    payload_json TEXT,
+    ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-[Your License Here]
+### Idempotency
 
-## Support
+Payment processing is **idempotent** using `payment_id` as the idempotency key:
 
-For issues and questions:
-- Check the [Troubleshooting](#troubleshooting) section
-- Review logs in Temporal UI (http://localhost:8233)
-- Consult `CLAUDE.md` for implementation details
+```python
+# Check if payment already processed
+existing = db.execute(
+    "SELECT status, amount FROM payments WHERE payment_id = :pid",
+    {"pid": payment_id}
+).one_or_none()
+
+if existing:
+    return {"status": existing.status, "amount": existing.amount}  # Safe retry
+```
+
+---
+
+## 🎯 Key Features Explained
+
+### 1. Signals
+
+Signals allow external systems to communicate with running workflows.
+
+**CancelOrder**
+- Can cancel before payment is charged
+- Sets `order_cancelled = True`
+- Workflow exits gracefully with "CANCELLED" status
+
+**UpdateAddress**
+- Can update before shipping starts
+- Merges new address into order
+- Applied before child workflow starts
+
+**ApproveOrder**
+- Required after validation
+- Allows workflow to proceed to payment
+- Timeout: 30 seconds
+
+### 2. Manual Review Timer
+
+```python
+self.state = "AWAITING_MANUAL_APPROVAL"
+
+# Wait for approval signal
+await workflow.wait_condition(
+    lambda: self.manual_review_approved or self.order_cancelled,
+    timeout=timedelta(seconds=30)
+)
+```
+
+### 3. Child Workflow with Retries
+
+```python
+max_shipping_retries = 3
+
+for attempt in range(max_shipping_retries):
+    try:
+        result = await workflow.execute_child_workflow(
+            ShippingWorkflow.run,
+            args=[order],
+            task_queue="shipping-tq",
+        )
+        break  # Success
+    except ChildWorkflowError as e:
+        if attempt < max_shipping_retries - 1:
+            await workflow.sleep(timedelta(seconds=2))  # Retry delay
+        else:
+            raise  # Failed after all retries
+```
+
+### 4. Structured Logging
+
+All state transitions, retries, and errors are logged:
+
+```python
+workflow.logger.info(f"OrderWorkflow: State transition to CHARGING_PAYMENT")
+workflow.logger.error(f"OrderWorkflow: ShippingWorkflow failed on attempt {attempt + 1}")
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+### Issue: Workers not picking up tasks
+
+**Solution**: Verify task queues match
+```python
+# In workflow:
+task_queue=ORDER_TASK_QUEUE  # Should be "order-tq"
+
+# In worker:
+task_queue=ORDER_TASK_QUEUE  # Should match
+```
+
+### Issue: Workflow times out waiting for approval
+
+**Solution**: Send approval signal within 30 seconds
+```bash
+python -m scripts.cli approve <order_id>
+```
+
+### Issue: Database connection error
+
+**Solution**: Check Docker services are running
+```bash
+docker-compose ps
+docker-compose logs db
+```
+
+### Issue: Temporal server not responding
+
+**Solution**: Check Temporal is healthy
+```bash
+docker-compose ps temporal
+docker-compose logs temporal
+```
+
+### View All Logs
+
+```bash
+# Application logs
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f temporal
+docker-compose logs -f db
+```
+
+---
+
+## 📦 Project Structure
+
+```
+temporal-order-orchestrator/
+│
+├── temporal_app/                    # Main application
+│   ├── config.py                    # Configuration (env vars, task queues)
+│   ├── workflows.py                 # OrderWorkflow, ShippingWorkflow
+│   ├── activities.py                # Activity definitions
+│   ├── functions.py                 # Business logic
+│   ├── db.py                        # Database session factory
+│   └── worker_dev.py                # Worker entry point (2 workers)
+│
+├── api/                             # REST API
+│   └── server.py                    # FastAPI server
+│
+├── scripts/                         # Utilities
+│   ├── cli.py                       # CLI tool
+│   ├── start_all.py                 # Startup script
+│   └── run_order_once.py            # Simple workflow trigger
+│
+├── tests/                           # Tests
+│   ├── test_workflows.py            # Workflow unit/integration tests
+│   └── test_api.py                  # API endpoint tests
+│
+├── db/                              # Database
+│   └── schema.sql                   # PostgreSQL schema
+│
+├── docker-compose.yml               # All services (Temporal + DBs)
+├── requirements.txt                 # Python dependencies
+├── pytest.ini                       # Pytest configuration
+├── .env.example                     # Environment template
+└── README.md                        # This file
+```
+
+---
+
+## 🔒 Security
+
+- ✅ Environment variables for credentials
+- ✅ `.env` excluded from git
+- ✅ Idempotent payment processing
+- ✅ Database transactions (ACID)
+- ✅ Input validation on API endpoints
+
+**Production Recommendations:**
+- Use strong, randomly generated passwords
+- Enable Temporal TLS
+- Use secrets management (AWS Secrets Manager, HashiCorp Vault)
+- Implement API authentication/authorization
+- Enable rate limiting
+
+---
+
+## 📞 Support
+
+For issues or questions:
+- Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- Review Temporal logs: `docker-compose logs temporal`
+- Open an issue on GitHub
+
+---
+
+## 📄 License
+
+This project is provided as-is for demonstration purposes.
+
+---
+
+## 🎓 Learning Resources
+
+- [Temporal Documentation](https://docs.temporal.io/)
+- [Temporal Python SDK](https://github.com/temporalio/sdk-python)
+- [Temporal Samples](https://github.com/temporalio/samples-python)
+
+---
+
+**Built with ❤️ using Temporal Workflow Engine**
