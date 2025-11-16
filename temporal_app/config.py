@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Temporal Configuration
 TEMPORAL_HOST = os.getenv("TEMPORAL_HOST", "localhost:7233")
