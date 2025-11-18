@@ -53,12 +53,20 @@ export default function OrderDetail() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Link
-            to="/"
-            className="inline-flex items-center text-primary-600 hover:text-primary-700 mb-4"
-          >
-            ← Back to Home
-          </Link>
+          <div className="flex gap-4 items-center mb-4">
+            <Link
+              to="/"
+              className="inline-flex items-center text-primary-600 hover:text-primary-700"
+            >
+              ← Back to Home
+            </Link>
+            <Link
+              to="/docs"
+              className="inline-flex items-center text-green-600 hover:text-green-700 text-sm"
+            >
+              📚 Help
+            </Link>
+          </div>
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-start justify-between">
               <div>

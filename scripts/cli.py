@@ -9,11 +9,21 @@ import sys
 from datetime import timedelta
 from temporalio.client import Client
 
+from sqlalchemy import text
+
 from temporal_app.config import TEMPORAL_HOST, ORDER_TASK_QUEUE
 from temporal_app.workflows import OrderWorkflow
+from temporal_app.db import SessionLocal
 
 
-async def start_order(order_id: str = None, payment_id: str = None):
+async def start_order(
+    order_id: str = None,
+    payment_id: str = None,
+    customer_id: str = None,
+    customer_name: str = None,
+    order_total: float = 100.0,
+    priority: str = "NORMAL",
+):
     """Start a new order workflow"""
     client = await Client.connect(TEMPORAL_HOST)
 
@@ -22,15 +32,46 @@ async def start_order(order_id: str = None, payment_id: str = None):
         order_id = f"order-{uuid.uuid4().hex[:8]}"
     if not payment_id:
         payment_id = f"payment-{uuid.uuid4().hex[:8]}"
+    if not customer_id:
+        customer_id = f"cust-{uuid.uuid4().hex[:8]}"
+
+    # Create customer if not exists (for demo purposes)
+    if not customer_name:
+        customer_name = f"Customer {customer_id[-4:]}"
+
+    # Check if customer exists, create if not
+    with SessionLocal() as db, db.begin():
+        existing = db.execute(
+            text("SELECT id FROM customers WHERE id = :id"),
+            {"id": customer_id}
+        ).one_or_none()
+
+        if not existing:
+            db.execute(
+                text("""
+                    INSERT INTO customers (id, name, email)
+                    VALUES (:id, :name, :email)
+                """),
+                {
+                    "id": customer_id,
+                    "name": customer_name,
+                    "email": f"{customer_id}@example.com",
+                },
+            )
+            print(f"✓ Created customer: {customer_id} ({customer_name})")
 
     print(f"\n🚀 Starting OrderWorkflow")
     print(f"   Order ID: {order_id}")
     print(f"   Payment ID: {payment_id}")
+    print(f"   Customer ID: {customer_id}")
+    print(f"   Customer Name: {customer_name}")
+    print(f"   Order Total: ${order_total:.2f}")
+    print(f"   Priority: {priority}")
     print(f"   Task Queue: {ORDER_TASK_QUEUE}")
 
     handle = await client.start_workflow(
         OrderWorkflow.run,
-        args=[order_id, payment_id],
+        args=[order_id, payment_id, customer_id, customer_name, order_total, priority],
         id=order_id,
         task_queue=ORDER_TASK_QUEUE,
         run_timeout=timedelta(seconds=15),
@@ -154,7 +195,10 @@ def print_usage():
     print("\nUsage:")
     print("  python -m scripts.cli <command> [arguments]")
     print("\nCommands:")
-    print("  start [order_id] [payment_id]  - Start a new order workflow")
+    print("  start [order_id] [payment_id] [customer_id] [customer_name] [order_total] [priority]")
+    print("                                  - Start a new order workflow")
+    print("                                    All arguments are optional")
+    print("                                    Priority: NORMAL, HIGH, URGENT (default: NORMAL)")
     print("  approve <order_id>              - Approve an order (manual review)")
     print("  cancel <order_id>               - Cancel an order")
     print("  update-address <order_id> <street> <city> <state> <zip>")
@@ -163,6 +207,7 @@ def print_usage():
     print("  wait <order_id>                 - Wait for workflow result")
     print("\nExamples:")
     print("  python -m scripts.cli start")
+    print("  python -m scripts.cli start order-001 payment-001 cust-001 \"John Doe\" 250.50 HIGH")
     print("  python -m scripts.cli approve order-abc123")
     print("  python -m scripts.cli cancel order-abc123")
     print("  python -m scripts.cli update-address order-abc123 \"123 Main St\" \"New York\" \"NY\" \"10001\"")
@@ -182,7 +227,11 @@ async def main():
         if command == "start":
             order_id = sys.argv[2] if len(sys.argv) > 2 else None
             payment_id = sys.argv[3] if len(sys.argv) > 3 else None
-            await start_order(order_id, payment_id)
+            customer_id = sys.argv[4] if len(sys.argv) > 4 else None
+            customer_name = sys.argv[5] if len(sys.argv) > 5 else None
+            order_total = float(sys.argv[6]) if len(sys.argv) > 6 else 100.0
+            priority = sys.argv[7] if len(sys.argv) > 7 else "NORMAL"
+            await start_order(order_id, payment_id, customer_id, customer_name, order_total, priority)
 
         elif command == "approve":
             if len(sys.argv) < 3:

@@ -18,18 +18,26 @@ async def flaky_call() -> None:
     # else: succeed immediately
 
 
-async def order_received(order_id: str) -> Dict[str, Any]:
+async def order_received(
+    order_id: str, customer_id: str, order_total: float = 0.0, priority: str = "NORMAL"
+) -> Dict[str, Any]:
     await flaky_call()
 
     # DB write: insert order row + event
     with SessionLocal() as db, db.begin():
         db.execute(
             text("""
-                INSERT INTO orders (id, state)
-                VALUES (:id, :state)
+                INSERT INTO orders (id, customer_id, state, order_total, priority)
+                VALUES (:id, :customer_id, :state, :order_total, :priority)
                 ON CONFLICT (id) DO NOTHING
             """),
-            {"id": order_id, "state": "RECEIVED"},
+            {
+                "id": order_id,
+                "customer_id": customer_id,
+                "state": "RECEIVED",
+                "order_total": order_total,
+                "priority": priority,
+            },
         )
         db.execute(
             text("""
@@ -39,12 +47,23 @@ async def order_received(order_id: str) -> Dict[str, Any]:
             {
                 "order_id": order_id,
                 "type": "ORDER_RECEIVED",
-                "payload": json.dumps({"order_id": order_id}),
+                "payload": json.dumps({
+                    "order_id": order_id,
+                    "customer_id": customer_id,
+                    "order_total": order_total,
+                    "priority": priority,
+                }),
             },
         )
 
     # Return a simple in-memory representation the workflow can carry along
-    return {"order_id": order_id, "items": [{"sku": "ABC", "qty": 1}]}
+    return {
+        "order_id": order_id,
+        "customer_id": customer_id,
+        "order_total": order_total,
+        "priority": priority,
+        "items": [{"sku": "ABC", "qty": 1}],
+    }
 
 
 async def order_validated(order: Dict[str, Any]) -> bool:
@@ -83,7 +102,7 @@ async def payment_charged(order: Dict[str, Any], payment_id: str) -> Dict[str, A
     await flaky_call()
 
     order_id = order["order_id"]
-    amount = sum(i.get("qty", 1) for i in order.get("items", []))
+    amount = order.get("order_total", 0.0)
 
     with SessionLocal() as db, db.begin():
         # Check if we already processed this payment_id

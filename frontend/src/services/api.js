@@ -9,13 +9,46 @@ const api = axios.create({
   },
 });
 
+// Customer API
+export const customerAPI = {
+  // Create a new customer
+  createCustomer: async (customerData) => {
+    const response = await api.post('/customers', customerData);
+    return response.data;
+  },
+
+  // Get all customers
+  getCustomers: async () => {
+    const response = await api.get('/customers');
+    return response.data;
+  },
+
+  // Get customer by ID
+  getCustomer: async (customerId) => {
+    const response = await api.get(`/customers/${customerId}`);
+    return response.data;
+  },
+};
+
 // Order API
 export const orderAPI = {
   // Start a new order
-  startOrder: async (orderId, paymentId = null) => {
-    const response = await api.post(`/orders/${orderId}/start`, {
-      payment_id: paymentId,
-    });
+  startOrder: async (orderId, orderData) => {
+    const response = await api.post(`/orders/${orderId}/start`, orderData);
+    return response.data;
+  },
+
+  // List/search orders
+  listOrders: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.customer_id) params.append('customer_id', filters.customer_id);
+    if (filters.customer_name) params.append('customer_name', filters.customer_name);
+    if (filters.priority) params.append('priority', filters.priority);
+    if (filters.min_total) params.append('min_total', filters.min_total);
+    if (filters.max_total) params.append('max_total', filters.max_total);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    const response = await api.get(`/orders?${params.toString()}`);
     return response.data;
   },
 
@@ -57,6 +90,10 @@ export const generateOrderId = () => {
 
 export const generatePaymentId = () => {
   return `payment-${Math.random().toString(36).substring(2, 10)}`;
+};
+
+export const generateCustomerId = () => {
+  return `cust-${Math.random().toString(36).substring(2, 10)}`;
 };
 
 export default api;

@@ -7,6 +7,7 @@ import logging
 
 from temporalio import workflow
 from temporalio.exceptions import ActivityError, ChildWorkflowError
+from temporalio.common import SearchAttributeKey
 
 from .activities import (
     receive_order_activity,
@@ -20,6 +21,12 @@ from .activities import activity_opts
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+# Define search attribute keys
+CUSTOMER_ID_ATTR = SearchAttributeKey.for_keyword("CustomerId")
+CUSTOMER_NAME_ATTR = SearchAttributeKey.for_text("CustomerName")
+ORDER_TOTAL_ATTR = SearchAttributeKey.for_float("OrderTotal")
+PRIORITY_ATTR = SearchAttributeKey.for_keyword("Priority")
 
 
 @workflow.defn
@@ -106,8 +113,29 @@ class OrderWorkflow:
         }
 
     @workflow.run
-    async def run(self, order_id: str, payment_id: str) -> str:
-        workflow.logger.info(f"OrderWorkflow: Started for order_id={order_id}, payment_id={payment_id}")
+    async def run(
+        self,
+        order_id: str,
+        payment_id: str,
+        customer_id: str,
+        customer_name: str,
+        order_total: float = 0.0,
+        priority: str = "NORMAL",
+    ) -> str:
+        workflow.logger.info(
+            f"OrderWorkflow: Started for order_id={order_id}, payment_id={payment_id}, "
+            f"customer_id={customer_id}, customer_name={customer_name}"
+        )
+
+        # Set search attributes for workflow discoverability
+        workflow.upsert_search_attributes(
+            [
+                CUSTOMER_ID_ATTR.value_set(customer_id),
+                CUSTOMER_NAME_ATTR.value_set(customer_name),
+                ORDER_TOTAL_ATTR.value_set(order_total),
+                PRIORITY_ATTR.value_set(priority),
+            ]
+        )
 
         try:
             # Step 1: receive
@@ -115,7 +143,7 @@ class OrderWorkflow:
             workflow.logger.info(f"OrderWorkflow: State transition to RECEIVING")
             order = await workflow.execute_activity(
                 receive_order_activity,
-                args=[order_id],
+                args=[order_id, customer_id, order_total, priority],
                 **activity_opts(),
             )
 

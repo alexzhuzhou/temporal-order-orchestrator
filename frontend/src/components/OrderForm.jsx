@@ -1,15 +1,36 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { orderAPI, generateOrderId, generatePaymentId } from '../services/api';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { orderAPI, customerAPI, generateOrderId, generatePaymentId } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
 export default function OrderForm() {
   const navigate = useNavigate();
   const [orderId, setOrderId] = useState(generateOrderId());
   const [paymentId, setPaymentId] = useState(generatePaymentId());
+  const [customerId, setCustomerId] = useState('');
+  const [orderTotal, setOrderTotal] = useState('100.00');
+  const [priority, setPriority] = useState('NORMAL');
+
+  // Fetch customers
+  const { data: customersData, isLoading: customersLoading } = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => customerAPI.getCustomers(),
+  });
+
+  // Auto-select first customer if available
+  useEffect(() => {
+    if (customersData?.customers && customersData.customers.length > 0 && !customerId) {
+      setCustomerId(customersData.customers[0].id);
+    }
+  }, [customersData, customerId]);
 
   const startOrderMutation = useMutation({
-    mutationFn: () => orderAPI.startOrder(orderId, paymentId),
+    mutationFn: () => orderAPI.startOrder(orderId, {
+      customer_id: customerId,
+      payment_id: paymentId,
+      order_total: parseFloat(orderTotal),
+      priority: priority,
+    }),
     onSuccess: () => {
       navigate(`/orders/${orderId}`);
     },
@@ -17,6 +38,10 @@ export default function OrderForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!customerId) {
+      alert('Please select a customer or create one first');
+      return;
+    }
     startOrderMutation.mutate();
   };
 
@@ -31,6 +56,76 @@ export default function OrderForm() {
         <h2 className="text-2xl font-bold mb-6 text-gray-800">Start New Order</h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Customer *
+            </label>
+            {customersLoading ? (
+              <p className="text-sm text-gray-500">Loading customers...</p>
+            ) : customersData?.customers?.length > 0 ? (
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                required
+              >
+                <option value="">Select a customer</option>
+                {customersData.customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name} ({customer.email})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <p className="text-sm text-yellow-800">
+                  No customers found. Please create a customer first on the Orders page.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Order Total *
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-2 text-gray-500">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={orderTotal}
+                onChange={(e) => setOrderTotal(e.target.value)}
+                className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="100.00"
+                required
+              />
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Total order amount in dollars
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Priority *
+            </label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              required
+            >
+              <option value="NORMAL">🟢 Normal</option>
+              <option value="HIGH">🟡 High</option>
+              <option value="URGENT">🔴 Urgent</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500">
+              Order processing priority
+            </p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Order ID

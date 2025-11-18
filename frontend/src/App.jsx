@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Home from './pages/Home';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
+import Documentation from './pages/Documentation';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -22,6 +23,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders/:orderId" element={<OrderDetail />} />
+          <Route path="/docs" element={<Documentation />} />
         </Routes>
       </Router>
     </QueryClientProvider>

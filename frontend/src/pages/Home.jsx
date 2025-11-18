@@ -13,12 +13,18 @@ export default function Home() {
           <p className="text-xl text-gray-600 mb-6">
             Temporal Workflow Orchestration for E-Commerce Orders
           </p>
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-4 flex-wrap">
             <Link
               to="/orders"
               className="inline-flex items-center gap-2 px-6 py-3 bg-white text-primary-600 rounded-lg shadow hover:shadow-lg transition font-medium"
             >
               📋 View All Orders
+            </Link>
+            <Link
+              to="/docs"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-600 rounded-lg shadow hover:shadow-lg transition font-medium"
+            >
+              📚 Documentation
             </Link>
             <a
               href="http://localhost:8080"

@@ -18,9 +18,9 @@ def activity_opts():
 
 
 @activity.defn
-async def receive_order_activity(order_id: str):
+async def receive_order_activity(order_id: str, customer_id: str, order_total: float = 0.0, priority: str = "NORMAL"):
     # Thin wrapper around business logic
-    return await functions.order_received(order_id)
+    return await functions.order_received(order_id, customer_id, order_total, priority)
 
 
 @activity.defn
