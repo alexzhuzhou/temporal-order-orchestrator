@@ -82,7 +82,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./config/ui/docker.yaml:/etc/temporal/config/docker.yaml:ro
+      - ./config/ui/docker.yaml:/usr/app/config/docker.yaml:ro
     networks:
       - temporal-network
     restart: unless-stopped
