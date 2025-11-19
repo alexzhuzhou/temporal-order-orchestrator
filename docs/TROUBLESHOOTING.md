@@ -593,7 +593,7 @@ If you're still experiencing issues:
 
 6. **Consult Documentation**
    - `README.md` - General setup and usage
-   - `CLAUDE.md` - Detailed architecture documentation
+   - `docs/CLAUDE.md` - Detailed architecture documentation
    - [Temporal Docs](https://docs.temporal.io/) - Official documentation
 
 ---
@@ -653,7 +653,7 @@ Before asking for help, verify:
 
 ## Need More Help?
 
-- Review the main [README.md](README.md)
+- Review the main [README.md](../README.md)
 - Check [CLAUDE.md](CLAUDE.md) for architecture details
 - Visit [Temporal Community](https://community.temporal.io/)
 - Check [Temporal GitHub Issues](https://github.com/temporalio/sdk-python/issues)

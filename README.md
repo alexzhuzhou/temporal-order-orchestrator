@@ -919,7 +919,7 @@ temporal-order-orchestrator/
 ## 📞 Support
 
 For issues or questions:
-- Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- Check [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 - Review Temporal logs: `docker-compose logs temporal`
 - Open an issue on GitHub
 

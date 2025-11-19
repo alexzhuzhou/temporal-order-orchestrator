@@ -41,7 +41,4 @@ Thumbs.db
 
 # Temporal
 .temporal/
-
-
-CLAUDE.md
-.github/
+.claude/
