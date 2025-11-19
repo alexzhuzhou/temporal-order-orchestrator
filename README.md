@@ -876,7 +876,6 @@ temporal-order-orchestrator/
 │
 ├── scripts/                         # Utilities
 │   ├── cli.py                       # CLI tool with customer support
-│   ├── start_all.py                 # Startup script
 │   ├── setup_search_attributes.py   # Python search attribute setup
 │   ├── setup_search_attributes.sh   # Bash search attribute setup
 │   └── setup_search_attributes.bat  # Windows search attribute setup
@@ -888,12 +887,25 @@ temporal-order-orchestrator/
 ├── db/                              # Database
 │   └── schema.sql                   # PostgreSQL schema (customers + orders + indexes)
 │
-├── docker-compose.yml               # All services (Temporal + DBs)
+├── docs/                            # Documentation
+│   ├── CLAUDE.md                    # Claude Code instructions
+│   ├── DEPLOYMENT.md                # Deployment guide
+│   └── TROUBLESHOOTING.md           # Troubleshooting reference
+│
+├── docker/                          # Docker configuration
+│   ├── Dockerfile.api               # API container
+│   ├── Dockerfile.worker            # Worker container
+│   ├── Dockerfile.frontend          # Frontend container
+│   └── nginx.conf                   # Nginx configuration
+│
+├── deployment/                      # Deployment scripts
+│   └── deploy.sh                    # Production deployment script
+│
+├── docker-compose.yml               # Development services (Temporal + DBs)
+├── docker-compose.production.yml    # Production services configuration
 ├── requirements.txt                 # Python dependencies
 ├── pytest.ini                       # Pytest configuration
 ├── .env.example                     # Environment template
-├── SEARCH_ATTRIBUTES.md             # Search attributes guide
-├── TESTING_GUIDE.md                 # Complete testing instructions
 └── README.md                        # This file
 ```
 
