@@ -1,0 +1,156 @@
+version: "3.9"
+
+services:
+  # Application database (PostgreSQL for order/payment data)
+  db:
+    image: postgres:16
+    container_name: order-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-trellis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-trellis}
+      POSTGRES_DB: ${DB_NAME:-trellis}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/0-schema.sql
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - temporal-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trellis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Temporal database (PostgreSQL for Temporal persistence)
+  temporal-db:
+    image: postgres:16
+    container_name: temporal-db
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    ports:
+      - "5433:5432"
+    volumes:
+      - temporal_db_data:/var/lib/postgresql/data
+    networks:
+      - temporal-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Temporal server
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: temporal
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-db
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    networks:
+      - temporal-network
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "workflow", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: temporal-ui
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=*
+    ports:
+      - "8080:8080"
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  # Temporal Workers (order-tq and shipping-tq)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: order-worker
+    depends_on:
+      db:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      DB_USER: ${DB_USER:-trellis}
+      DB_PASSWORD: ${DB_PASSWORD:-trellis}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-trellis}
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  # FastAPI Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: order-api
+    depends_on:
+      db:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      DB_USER: ${DB_USER:-trellis}
+      DB_PASSWORD: ${DB_PASSWORD:-trellis}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-trellis}
+    ports:
+      - "8000:8000"
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  # React Frontend with Nginx
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: order-frontend
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+networks:
+  temporal-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  temporal_db_data:
