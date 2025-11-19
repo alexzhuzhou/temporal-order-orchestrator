@@ -20,11 +20,11 @@ persistence:
                 maxConnLifetime: 1h
                 tls:
                     enabled: false
-                    caFile:
-                    certFile:
-                    keyFile:
+                    caFile: ""
+                    certFile: ""
+                    keyFile: ""
                     enableHostVerification: false
-                    serverName:
+                    serverName: ""
         visibility:
             sql:
                 pluginName: "postgres12"
@@ -38,16 +38,14 @@ persistence:
                 maxConnLifetime: 1h
                 tls:
                     enabled: false
-                    caFile:
-                    certFile:
-                    keyFile:
+                    caFile: ""
+                    certFile: ""
+                    keyFile: ""
                     enableHostVerification: false
-                    serverName:
-
+                    serverName: ""
 global:
     membership:
         maxJoinDuration: 30s
-        broadcastAddress: ""
     pprof:
         port: 0
     tls:
@@ -59,55 +57,55 @@ global:
         internode:
             server:
                 requireClientAuth: false
-                certFile:
-                keyFile:
-                certData:
-                keyData:
+                certFile: ""
+                keyFile: ""
+                certData: ""
+                keyData: ""
             client:
-                serverName:
+                serverName: ""
                 disableHostVerification: false
         frontend:
             server:
                 requireClientAuth: false
-                certFile:
-                keyFile:
-                certData:
-                keyData:
+                certFile: ""
+                keyFile: ""
+                certData: ""
+                keyData: ""
             client:
-                serverName:
+                serverName: ""
                 disableHostVerification: false
     authorization:
         jwtKeyProvider:
-            keySourceURIs:
+            keySourceURIs: []
             refreshInterval: 1m
         permissionsClaimName: permissions
-        authorizer:
-        claimMapper:
+        authorizer: ""
+        claimMapper: ""
 services:
     frontend:
         rpc:
             grpcPort: 7233
             membershipPort: 6933
-            bindOnIP: 172.18.0.4
+            bindOnIP: "0.0.0.0"
             httpPort: 7243
 
     matching:
         rpc:
             grpcPort: 7235
             membershipPort: 6935
-            bindOnIP: 172.18.0.4
+            bindOnIP: "0.0.0.0"
 
     history:
         rpc:
             grpcPort: 7234
             membershipPort: 6934
-            bindOnIP: 172.18.0.4
+            bindOnIP: "0.0.0.0"
 
     worker:
         rpc:
             grpcPort: 7239
             membershipPort: 6939
-            bindOnIP: 172.18.0.4
+            bindOnIP: "0.0.0.0"
 
 clusterMetadata:
     enableGlobalNamespace: false
@@ -148,7 +146,6 @@ namespaceDefaults:
     visibility:
       state: "disabled"
       URI: "file:///tmp/temporal_vis_archival/development"
-
 
 dynamicConfigClient:
     filepath: "/etc/temporal/config/dynamicconfig/docker.yaml"

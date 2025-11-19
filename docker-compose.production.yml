@@ -69,23 +69,22 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Temporal Web UI
-  temporal-ui:
-    image: temporalio/ui:2.26.2
-    container_name: temporal-ui
-    depends_on:
-      temporal:
-        condition: service_healthy
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=*
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./config/ui/docker.yaml:/config/docker.yaml:ro
-    networks:
-      - temporal-network
-    restart: unless-stopped
+  # Temporal Web UI (Optional - currently disabled due to config compatibility)
+  # To enable: uncomment this section and run: docker compose -f docker-compose.production.yml up -d temporal-ui
+  # temporal-ui:
+  #   image: temporalio/ui:2.26.2
+  #   container_name: temporal-ui
+  #   depends_on:
+  #     temporal:
+  #       condition: service_healthy
+  #   environment:
+  #     - TEMPORAL_ADDRESS=temporal:7233
+  #     - TEMPORAL_CORS_ORIGINS=*
+  #   ports:
+  #     - "8080:8080"
+  #   networks:
+  #     - temporal-network
+  #   restart: unless-stopped
 
   # Temporal Workers (order-tq and shipping-tq)
   worker:
