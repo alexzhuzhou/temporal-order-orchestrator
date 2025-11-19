@@ -81,6 +81,8 @@ services:
       - TEMPORAL_CORS_ORIGINS=*
     ports:
       - "8080:8080"
+    volumes:
+      - ./config/ui/docker.yaml:/etc/temporal/config/docker.yaml:ro
     networks:
       - temporal-network
     restart: unless-stopped

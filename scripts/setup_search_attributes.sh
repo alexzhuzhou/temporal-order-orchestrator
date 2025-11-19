@@ -8,19 +8,20 @@ echo "=================================================="
 echo ""
 
 echo "Adding CustomerId (Keyword)..."
-docker exec temporal tctl admin cluster add-search-attributes \
+# Pipe a 'y' into tctl to accept the prompt non-interactively when needed
+printf 'y\n' | docker exec -i temporal tctl --address temporal:7233 admin cluster add-search-attributes \
   --name CustomerId --type Keyword || echo "  (may already exist)"
 
 echo "Adding CustomerName (Text)..."
-docker exec temporal tctl admin cluster add-search-attributes \
+printf 'y\n' | docker exec -i temporal tctl --address temporal:7233 admin cluster add-search-attributes \
   --name CustomerName --type Text || echo "  (may already exist)"
 
 echo "Adding OrderTotal (Double)..."
-docker exec temporal tctl admin cluster add-search-attributes \
+printf 'y\n' | docker exec -i temporal tctl --address temporal:7233 admin cluster add-search-attributes \
   --name OrderTotal --type Double || echo "  (may already exist)"
 
 echo "Adding Priority (Keyword)..."
-docker exec temporal tctl admin cluster add-search-attributes \
+printf 'y\n' | docker exec -i temporal tctl --address temporal:7233 admin cluster add-search-attributes \
   --name Priority --type Keyword || echo "  (may already exist)"
 
 echo ""
